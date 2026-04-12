@@ -40,4 +40,5 @@ class MCPHttpAdapter(MCPTransportAdapter):
     def serve(self) -> None:
         MCPHttpRequestHandler.server_impl = self.server_impl
         httpd = HTTPServer((self.listening_intf, self.listening_port), MCPHttpRequestHandler)
+        print(f"MCP HTTP Adapter listening on {self.listening_intf}:{self.listening_port}")
         httpd.serve_forever()

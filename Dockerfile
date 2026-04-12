@@ -17,4 +17,4 @@ COPY src/ .
 # Expose MCP port
 EXPOSE 8080
 
-CMD ["python", "main.py"] 
+ENTRYPOINT ["python", "main.py"] 
