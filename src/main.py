@@ -17,7 +17,7 @@ mcp = MCPServer('stopandshop-moderation', 'A moderation server for Stop and Shop
 
 def get_conn():
     return mysql.connector.connect(
-        host=os.getenv("DB_HOST", "mariadb"),
+        host=os.getenv("DB_HOST", "localhost"),
         user=os.getenv("DB_USER", "root"),
         password=os.getenv("DB_PASSWORD", "root"),
         database=os.getenv("DB_NAME", "stopandshop"),
