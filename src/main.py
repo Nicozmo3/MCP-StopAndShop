@@ -21,6 +21,7 @@ def get_conn():
         user=os.getenv("DB_USER", "root"),
         password=os.getenv("DB_PASSWORD", "root"),
         database=os.getenv("DB_NAME", "stopandshop"),
+        port=int(os.getenv("DB_PORT", "3306"))
     )
 
 @mcp.tool(
