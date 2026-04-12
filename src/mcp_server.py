@@ -1,3 +1,5 @@
+import json
+
 from json_rpc import build_json_rpc_error_response, build_json_rpc_success_response, validate_json_rpc_request
 import inspect
 from tool import Tool
@@ -69,8 +71,8 @@ class MCPServer:
         return {
             "content": [
                 {
-                    "type": "json",
-                    "json": result
+                    "type": "text",
+                    "text": json.dumps(result)
                 }
             ]
         }
