@@ -51,7 +51,7 @@ class MCPServer:
                     "name": tool.name,
                     "description": tool.description,
                     "inputSchema": tool.input_schema,
-                    "outputSchema": tool.output_schema or {"type": "object"}
+                    # "outputSchema": tool.output_schema or {"type": "object"}
                 }
                 for tool in self._tools.values()
             ]

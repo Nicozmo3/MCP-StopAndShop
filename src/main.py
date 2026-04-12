@@ -42,29 +42,29 @@ def get_conn():
         },
         "required": []
     },
-    output_schema={
-        "type": "object",
-        "properties": {
-            "comments": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "comment_id": {"type": "integer"},
-                    "text": {"type": "string"},
-                    "note": {"type": "integer"},
-                    "created_at": {"type": "string"},
-                    "upvote_count": {"type": "integer"},
-                    "downvote_count": {"type": "integer"},
-                    "is_anonymous": {"type": "boolean"},
-                    "brand_name": {"type": "string"},
-                    "belief_title": {"type": "string"},
-                    "belief_description": {"type": "string"}
-                }
-            }
-        }
-    }
-})
+    #output_schema={
+    #    "type": "object",
+    #    "properties": {
+    #        "comments": {
+    #        "type": "array",
+    #        "items": {
+    #            "type": "object",
+    #            "properties": {
+    #                "comment_id": {"type": "integer"},
+    #                "text": {"type": "string"},
+    #                "note": {"type": "integer"},
+    #                "created_at": {"type": "string"},
+    #                "upvote_count": {"type": "integer"},
+    #                "downvote_count": {"type": "integer"},
+    #                "is_anonymous": {"type": "boolean"},
+    #                "brand_name": {"type": "string"},
+    #                "belief_title": {"type": "string"},
+    #                "belief_description": {"type": "string"}
+    #            }
+    #        }
+    #    }
+    #}}
+)
 def get_comments_since(since: str, limit: int = 50):
     if since is None:
         since = default_since_iso()
