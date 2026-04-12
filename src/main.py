@@ -4,7 +4,10 @@ from mcp_adapter_stdio import MCPStdioAdapter
 from mcp_server import MCPServer
 import mysql.connector
 import os
+from datetime import datetime, timedelta, timezone
 
+def default_since_iso() -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
 
 DEFAULT_LISTENING_PORT: int = 8080
 DEFAULT_LISTENING_INTF: str = '0.0.0.0'
@@ -29,14 +32,14 @@ def get_conn():
             "since": {
                 "type": "string",
                 "format": "date-time",
-                "description": "ISO datetime (e.g. 2026-04-01T00:00:00)"
+                "description": "ISO datetime (e.g. 2026-04-01T00:00:00). Defaults to 24 hours ago (UTC) if omitted."
             },
             "limit": {
                 "type": "integer",
                 "default": 50
             }
         },
-        "required": ["since"]
+        "required": []
     },
     output_schema={
         "type": "array",
@@ -60,6 +63,9 @@ def get_conn():
     }
 )
 def get_comments_since(since: str, limit: int = 50):
+    if since is None:
+        since = default_since_iso()
+        
     conn = get_conn()
     cursor = conn.cursor(dictionary=True)
 
