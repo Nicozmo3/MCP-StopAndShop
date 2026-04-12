@@ -7,17 +7,17 @@ import os
 
 
 DEFAULT_LISTENING_PORT: int = 8080
-DEFAULT_LISTENING_INTF: str = 'localhost'
+DEFAULT_LISTENING_INTF: str = '0.0.0.0'
 DEFAULT_TRANSPORT: str = 'http'
 
 mcp = MCPServer('stopandshop-moderation', 'A moderation server for Stop and Shop')
 
 def get_conn():
     return mysql.connector.connect(
-        host=os.getenv("DB_HOST", "localhost"),
+        host=os.getenv("DB_HOST", "mariadb"),
         user=os.getenv("DB_USER", "root"),
-        password=os.getenv("DB_PASSWORD", "password"),
-        database=os.getenv("DB_NAME", "reviews_db"),
+        password=os.getenv("DB_PASSWORD", "root"),
+        database=os.getenv("DB_NAME", "stopandshop"),
     )
 
 @mcp.tool(
@@ -68,10 +68,6 @@ def get_comments_since(since: str, limit: int = 50):
             c.comment_id,
             c.text,
             c.note,
-            c.created_at,
-            c.upvote_count,
-            c.downvote_count,
-            c.is_anonymous,
 
             b.name AS brand_name,
 
