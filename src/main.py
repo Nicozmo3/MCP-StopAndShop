@@ -80,7 +80,7 @@ def get_comments_since(limit: int = 50):
         LIMIT %s
     """
 
-    cursor.execute(query, (limit))
+    cursor.execute(query, (limit,))
     results = cursor.fetchall()
 
     cursor.close()
