@@ -92,11 +92,57 @@ def get_comments_since(since: str, limit: int = 50):
 
     return results
 
-@mcp.tool(name="mark_review_as_inappropriate", description="Mark a review as inappropriate")
-def mark_review_as_inappropriate(review_id: int):
-    print(f"Marking review {review_id} as inappropriate")
+@mcp.tool(
+    name="mark_comments_not_pertinent",
+    description="Mark multiple comments as not pertinent after LLM classification",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "comment_ids": {
+                "type": "array",
+                "items": {"type": "integer"},
+                "description": "List of comment IDs to mark as not pertinent"
+            }
+        },
+        "required": ["comment_ids"]
+    },
+    output_schema={
+        "type": "object",
+        "properties": {
+            "updated_count": {
+                "type": "integer"
+            },
+            "updated_ids": {
+                "type": "array",
+                "items": {"type": "integer"}
+            }
+        }
+    }
+)
+def mark_comments_not_pertinent(comment_ids: list[int], reason: str = None):
+    conn = get_conn()
+    cursor = conn.cursor()
 
-    return {"status": "success", "review_id": review_id}
+    placeholders = ",".join(["%s"] * len(comment_ids))
+
+    query = f"""
+        UPDATE comment
+        SET is_moderation_pertinent = FALSE
+        WHERE comment_id IN ({placeholders})
+    """
+
+    cursor.execute(query, comment_ids)
+    conn.commit()
+
+    updated_count = cursor.rowcount
+
+    cursor.close()
+    conn.close()
+
+    return {
+        "updated_count": updated_count,
+        "updated_ids": comment_ids
+    }
 
 
 def main(argv: list[str]) -> int:

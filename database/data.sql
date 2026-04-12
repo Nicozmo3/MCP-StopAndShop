@@ -84,6 +84,7 @@ CREATE TABLE comment (
     created_at DATETIME,
     upvote_count INT,
     downvote_count INT,
+    is_moderation_pertinent BOOLEAN DEFAULT TRUE,
     FOREIGN KEY (author_id) REFERENCES account(account_id),
     FOREIGN KEY (concerned_brand_id) REFERENCES brand(brand_id),
     FOREIGN KEY (concerned_belief_id) REFERENCES belief(belief_id)
