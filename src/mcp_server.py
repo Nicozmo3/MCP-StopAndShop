@@ -14,44 +14,16 @@ class MCPServer:
         self.description = description
         self._tools = {}
 
-    def tool(self, name: str, description: str, output_schema: dict | None = None):
+    def tool(self, name: str, description: str, input_schema: dict | None = None, output_schema: dict | None = None):
         def decorator(func):
             tool_name = name or func.__name__
             tool_description = description or func.__doc__ or ""
 
-            input_schema = self._build_tool_input_schema(func)
             self._tools[tool_name] = Tool(name, tool_description, func, input_schema, output_schema)
 
             return func
 
         return decorator
-    
-    def _build_tool_input_schema(self, func):
-        sig = inspect.signature(func)
-
-        properties = {}
-        required = []
-
-        for name, param in sig.parameters.items():
-            param_type = "string"
-
-            if param.annotation == int:
-                param_type = "integer"
-            elif param.annotation == float:
-                param_type = "number"
-            elif param.annotation == bool:
-                param_type = "boolean"
-
-            properties[name] = {"type": param_type}
-
-            if param.default == inspect._empty:
-                required.append(name)
-
-        return {
-            "type": "object",
-            "properties": properties,
-            "required": required
-        }
 
     def initialize(self) -> dict:
         return {

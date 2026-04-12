@@ -1,0 +1,27 @@
+services:
+
+  mariadb:
+    image: mariadb:11
+    container_name: mariadb
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: stopandshop
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./database/data.sql:/docker-entrypoint-initdb.d/data.sql
+
+  mcp-server:
+    build: .
+    container_name: mcp-server
+    restart: always
+    depends_on:
+      - mariadb
+    environment:
+      DB_HOST: mariadb
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: stopandshop
+    ports:
+      - "8080:8080"
