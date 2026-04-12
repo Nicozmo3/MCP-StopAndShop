@@ -8,4 +8,4 @@ class Tool:
         self.output_schema = output_schema
 
     def execute(self, **kwargs):
-        raise NotImplementedError("Tool execution not implemented")
+        return self.function(**kwargs)
