@@ -6,9 +6,6 @@ import mysql.connector
 import os
 from datetime import datetime, timedelta, timezone
 
-def default_since_iso() -> str:
-    return (datetime.now(timezone.utc) - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
-
 DEFAULT_LISTENING_PORT: int = 8080
 DEFAULT_LISTENING_INTF: str = '0.0.0.0'
 DEFAULT_TRANSPORT: str = 'http'
@@ -30,11 +27,6 @@ def get_conn():
     input_schema={
         "type": "object",
         "properties": {
-            "since": {
-                "type": "string",
-                "format": "date-time",
-                "description": "ISO datetime (e.g. 2026-04-01T00:00:00). Defaults to 24 hours ago (UTC) if omitted."
-            },
             "limit": {
                 "type": "integer",
                 "default": 50
@@ -65,10 +57,7 @@ def get_conn():
     #    }
     #}}
 )
-def get_comments_since(since: str, limit: int = 50):
-    if since is None:
-        since = default_since_iso()
-        
+def get_comments_since(limit: int = 50):
     conn = get_conn()
     cursor = conn.cursor(dictionary=True)
 
@@ -77,9 +66,7 @@ def get_comments_since(since: str, limit: int = 50):
             c.comment_id,
             c.text,
             c.note,
-
             b.name AS brand_name,
-
             bl.title AS belief_title,
             bl.description AS belief_description
 
@@ -87,13 +74,13 @@ def get_comments_since(since: str, limit: int = 50):
         JOIN brand b ON c.concerned_brand_id = b.brand_id
         JOIN belief bl ON c.concerned_belief_id = bl.belief_id
 
-        WHERE c.created_at > %s
+        WHERE c.is_moderation_pertinent IS NULL
 
         ORDER BY c.created_at ASC
         LIMIT %s
     """
 
-    cursor.execute(query, (since, limit))
+    cursor.execute(query, (limit))
     results = cursor.fetchall()
 
     cursor.close()
