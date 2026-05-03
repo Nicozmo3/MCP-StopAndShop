@@ -6,6 +6,9 @@ import mysql.connector
 import os
 from datetime import datetime, timedelta, timezone
 
+# Importer les outils de suggestion d'emoji
+from petition_tools import suggest_petition_emoji, analyze_petition_text
+
 DEFAULT_LISTENING_PORT: int = 8080
 DEFAULT_LISTENING_INTF: str = '0.0.0.0'
 DEFAULT_TRANSPORT: str = 'http'
@@ -21,6 +24,7 @@ def get_conn():
         port=int(os.getenv("DB_PORT", "3306"))
     )
 
+
 @mcp.tool(
     name="get_comments_since",
     description="Retrieve comments posted after a given date with brand and belief context",
@@ -34,28 +38,6 @@ def get_conn():
         },
         "required": []
     },
-    #output_schema={
-    #    "type": "object",
-    #    "properties": {
-    #        "comments": {
-    #        "type": "array",
-    #        "items": {
-    #            "type": "object",
-    #            "properties": {
-    #                "comment_id": {"type": "integer"},
-    #                "text": {"type": "string"},
-    #                "note": {"type": "integer"},
-    #                "created_at": {"type": "string"},
-    #                "upvote_count": {"type": "integer"},
-    #                "downvote_count": {"type": "integer"},
-    #                "is_anonymous": {"type": "boolean"},
-    #                "brand_name": {"type": "string"},
-    #                "belief_title": {"type": "string"},
-    #                "belief_description": {"type": "string"}
-    #            }
-    #        }
-    #    }
-    #}}
 )
 def get_comments_since(limit: int = 50):
     conn = get_conn()
@@ -140,6 +122,52 @@ def mark_comments_not_pertinent(comment_ids: list[int], reason: str = None):
         "updated_count": updated_count,
         "updated_ids": comment_ids
     }
+
+
+# Enregistrer les outils de suggestion d'emoji
+@mcp.tool(
+    name="suggest_petition_emoji",
+    description="Suggère un emoji pertinent pour une pétition basé sur sa description en utilisant Mistral AI",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "description": {
+                "type": "string",
+                "description": "La description textuelle de la pétition"
+            }
+        },
+        "required": ["description"]
+    },
+    output_schema={
+        "type": "object",
+        "properties": {
+            "emoji": {
+                "type": "string",
+                "description": "L'emoji suggéré"
+            }
+        }
+    }
+)
+def mcp_suggest_petition_emoji(description: str) -> dict:
+    return suggest_petition_emoji(description)
+
+
+@mcp.tool(
+    name="analyze_petition_text",
+    description="Analyse complète du texte d'une pétition avec catégorie, sentiment, mots-clés et emoji suggéré",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "text": {
+                "type": "string",
+                "description": "Le texte à analyser"
+            }
+        },
+        "required": ["text"]
+    }
+)
+def mcp_analyze_petition_text(text: str) -> dict:
+    return analyze_petition_text(text)
 
 
 def main(argv: list[str]) -> int:
