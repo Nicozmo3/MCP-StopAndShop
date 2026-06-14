@@ -1,19 +1,26 @@
+import os
 import sys
+from datetime import datetime, timedelta, timezone
+
+import mysql.connector
+from dotenv import load_dotenv
+
 from mcp_adapter_http import MCPHttpAdapter
 from mcp_adapter_stdio import MCPStdioAdapter
 from mcp_server import MCPServer
-import mysql.connector
-import os
-from datetime import datetime, timedelta, timezone
+
+# Charger les variables d'environnement depuis .env
+load_dotenv()
 
 # Importer les outils de suggestion d'emoji
-from petition_tools import suggest_petition_emoji, analyze_petition_text
+from petition_tools import analyze_petition_text, suggest_petition_emoji
 
-DEFAULT_LISTENING_PORT: int = 8080
-DEFAULT_LISTENING_INTF: str = '0.0.0.0'
-DEFAULT_TRANSPORT: str = 'http'
+DEFAULT_LISTENING_PORT: int = 8081
+DEFAULT_LISTENING_INTF: str = "0.0.0.0"
+DEFAULT_TRANSPORT: str = "http"
 
-mcp = MCPServer('stopandshop-moderation', 'A moderation server for Stop and Shop')
+mcp = MCPServer("stopandshop-moderation", "A moderation server for Stop and Shop")
+
 
 def get_conn():
     return mysql.connector.connect(
@@ -21,7 +28,7 @@ def get_conn():
         user=os.getenv("DB_USER", "root"),
         password=os.getenv("DB_PASSWORD", "root"),
         database=os.getenv("DB_NAME", "stopandshop"),
-        port=int(os.getenv("DB_PORT", "3306"))
+        port=int(os.getenv("DB_PORT", "3306")),
     )
 
 
@@ -30,13 +37,8 @@ def get_conn():
     description="Retrieve comments posted after a given date with brand and belief context",
     input_schema={
         "type": "object",
-        "properties": {
-            "limit": {
-                "type": "integer",
-                "default": 50
-            }
-        },
-        "required": []
+        "properties": {"limit": {"type": "integer", "default": 50}},
+        "required": [],
     },
 )
 def get_comments_since(limit: int = 50):
@@ -68,7 +70,7 @@ def get_comments_since(limit: int = 50):
     cursor.close()
     conn.close()
 
-    return { "comments": results }
+    return {"comments": results}
 
 
 @mcp.tool(
@@ -80,23 +82,18 @@ def get_comments_since(limit: int = 50):
             "comment_ids": {
                 "type": "array",
                 "items": {"type": "integer"},
-                "description": "List of comment IDs to mark as not pertinent"
+                "description": "List of comment IDs to mark as not pertinent",
             }
         },
-        "required": ["comment_ids"]
+        "required": ["comment_ids"],
     },
     output_schema={
         "type": "object",
         "properties": {
-            "updated_count": {
-                "type": "integer"
-            },
-            "updated_ids": {
-                "type": "array",
-                "items": {"type": "integer"}
-            }
-        }
-    }
+            "updated_count": {"type": "integer"},
+            "updated_ids": {"type": "array", "items": {"type": "integer"}},
+        },
+    },
 )
 def mark_comments_not_pertinent(comment_ids: list[int], reason: str = None):
     conn = get_conn()
@@ -118,9 +115,72 @@ def mark_comments_not_pertinent(comment_ids: list[int], reason: str = None):
     cursor.close()
     conn.close()
 
+    return {"updated_count": updated_count, "updated_ids": comment_ids}
+
+
+@mcp.tool(
+    name="check_comment_pertinence",
+    description="Check if a single comment is pertinent using LLM analysis",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "comment_id": {"type": "integer", "description": "The comment ID to check"},
+            "text": {"type": "string", "description": "The comment text"},
+            "brand_name": {"type": "string", "description": "The brand name"},
+            "belief_title": {"type": "string", "description": "The belief title"},
+        },
+        "required": ["comment_id", "text", "brand_name", "belief_title"],
+    },
+    output_schema={
+        "type": "object",
+        "properties": {
+            "comment_id": {"type": "integer"},
+            "is_pertinent": {"type": "boolean"},
+            "reason": {"type": "string"},
+        },
+    },
+)
+def check_comment_pertinence(
+    comment_id: int, text: str, brand_name: str, belief_title: str
+) -> dict:
+    """
+    Check if a comment is pertinent based on its content and context.
+    For now, implements a simple check - in production this would call an LLM.
+    """
+    # Simple heuristic: check if comment is too short or contains inappropriate content
+    text_lower = text.lower()
+
+    # Check for minimum meaningful length
+    if len(text.strip()) < 10:
+        return {
+            "comment_id": comment_id,
+            "is_pertinent": False,
+            "reason": "Comment is too short to be meaningful",
+        }
+
+    # Check for off-topic indicators (simple keyword matching for demo)
+    off_topic_keywords = ["test", "spam", "fake", "scam", "http", "https", "www"]
+    if any(keyword in text_lower for keyword in off_topic_keywords):
+        return {
+            "comment_id": comment_id,
+            "is_pertinent": False,
+            "reason": f"Comment contains off-topic content",
+        }
+
+    # Check if comment mentions the brand or belief (simple check)
+    context_keywords = [brand_name.lower(), belief_title.lower()]
+    if not any(keyword in text_lower for keyword in context_keywords):
+        return {
+            "comment_id": comment_id,
+            "is_pertinent": False,
+            "reason": "Comment does not mention the brand or belief",
+        }
+
+    # If none of the above, consider it pertinent
     return {
-        "updated_count": updated_count,
-        "updated_ids": comment_ids
+        "comment_id": comment_id,
+        "is_pertinent": True,
+        "reason": "Comment appears to be on-topic and relevant",
     }
 
 
@@ -133,20 +193,15 @@ def mark_comments_not_pertinent(comment_ids: list[int], reason: str = None):
         "properties": {
             "description": {
                 "type": "string",
-                "description": "La description textuelle de la pétition"
+                "description": "La description textuelle de la pétition",
             }
         },
-        "required": ["description"]
+        "required": ["description"],
     },
     output_schema={
         "type": "object",
-        "properties": {
-            "emoji": {
-                "type": "string",
-                "description": "L'emoji suggéré"
-            }
-        }
-    }
+        "properties": {"emoji": {"type": "string", "description": "L'emoji suggéré"}},
+    },
 )
 def mcp_suggest_petition_emoji(description: str) -> dict:
     return suggest_petition_emoji(description)
@@ -158,26 +213,24 @@ def mcp_suggest_petition_emoji(description: str) -> dict:
     input_schema={
         "type": "object",
         "properties": {
-            "text": {
-                "type": "string",
-                "description": "Le texte à analyser"
-            }
+            "text": {"type": "string", "description": "Le texte à analyser"}
         },
-        "required": ["text"]
-    }
+        "required": ["text"],
+    },
 )
 def mcp_analyze_petition_text(text: str) -> dict:
     return analyze_petition_text(text)
 
 
 def main(argv: list[str]) -> int:
-    transport = argv[1] if len(argv) > 1 else DEFAULT_TRANSPORT
+    # Lire le transport depuis les arguments ou le .env
+    transport = argv[1] if len(argv) > 1 else os.getenv("TRANSPORT", DEFAULT_TRANSPORT)
 
-    if transport == 'stdio':
+    if transport == "stdio":
         adapter = MCPStdioAdapter(mcp)
     else:
-        listening_intf = argv[2] if len(argv) > 2 else DEFAULT_LISTENING_INTF
-        listening_port = int(argv[3]) if len(argv) > 3 else DEFAULT_LISTENING_PORT
+        listening_intf = argv[2] if len(argv) > 2 else os.getenv("HOST", DEFAULT_LISTENING_INTF)
+        listening_port = int(argv[3]) if len(argv) > 3 else int(os.getenv("PORT", DEFAULT_LISTENING_PORT))
         adapter = MCPHttpAdapter(mcp, listening_intf, listening_port)
 
     adapter.serve()

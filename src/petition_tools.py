@@ -8,7 +8,7 @@ import os
 import re
 
 # Configuration Mistral AI
-MISTRAL_API_KEY = os.getenv('MISTRAL_API_KEY')
+MISTRAL_API_KEY = "hN99naAArB7w8zH8W78Bgmw9xeIjQMjX"
 
 # Emoji par défaut si Mistral échoue
 DEFAULT_EMOJI = '📢'

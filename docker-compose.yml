@@ -1,27 +1,30 @@
+version: "3.8"
+
 services:
-
-  mariadb:
-    image: mariadb:11
-    container_name: mariadb
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: stopandshop
-    ports:
-      - "3306:3306"
-    volumes:
-      - ./database/data.sql:/docker-entrypoint-initdb.d/data.sql
-
   mcp-server:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: mcp-server
     restart: always
-    depends_on:
-      - mariadb
     environment:
-      DB_HOST: mariadb
+      DB_HOST: sas-db
       DB_USER: root
-      DB_PASSWORD: root
-      DB_NAME: stopandshop
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      DB_NAME: ${DB_NAME:-stopandshop}
+      DB_PORT: 3306
+      PORT: 8443
+      HOST: 0.0.0.0
+      TRANSPORT: https
+      SSL_CERTFILE: /app/certs/server.crt
+      SSL_KEYFILE: /app/certs/server.key
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
     ports:
-      - "8080:8080"
+      - "8443:8443"
+    networks:
+      - stop-shop_sas-net
+
+networks:
+  stop-shop_sas-net:
+    external: true
+
