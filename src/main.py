@@ -9,10 +9,8 @@ from mcp_adapter_http import MCPHttpAdapter
 from mcp_adapter_stdio import MCPStdioAdapter
 from mcp_server import MCPServer
 
-# Charger les variables d'environnement depuis .env
 load_dotenv()
 
-# Importer les outils de suggestion d'emoji
 from petition_tools import analyze_petition_text, suggest_petition_emoji
 
 DEFAULT_LISTENING_PORT: int = 8081
@@ -115,6 +113,10 @@ def mark_comments_not_pertinent(comment_ids: list[int], reason: str = None):
     cursor.close()
     conn.close()
 
+    if updated_count > 0:
+        reason_str = f" - Raison: {reason}" if reason else ""
+        print(f"[COMMENT_MODERATION] {updated_count} commentaires marques comme NON PERTINENTS en base: {comment_ids}{reason_str}")
+    
     return {"updated_count": updated_count, "updated_ids": comment_ids}
 
 
@@ -147,44 +149,81 @@ def check_comment_pertinence(
     Check if a comment is pertinent based on its content and context.
     For now, implements a simple check - in production this would call an LLM.
     """
-    # Simple heuristic: check if comment is too short or contains inappropriate content
     text_lower = text.lower()
 
-    # Check for minimum meaningful length
     if len(text.strip()) < 10:
-        return {
+        result = {
             "comment_id": comment_id,
             "is_pertinent": False,
             "reason": "Comment is too short to be meaningful",
         }
+        text_preview = text[:50] + "..." if len(text) > 50 else text
+        print(f"[COMMENT_MODERATION] Comment {comment_id} MASQUE - Raison: {result['reason']} (texte: '{text_preview}')")
+        return result
 
-    # Check for off-topic indicators (simple keyword matching for demo)
     off_topic_keywords = ["test", "spam", "fake", "scam", "http", "https", "www"]
     if any(keyword in text_lower for keyword in off_topic_keywords):
-        return {
+        result = {
             "comment_id": comment_id,
             "is_pertinent": False,
             "reason": f"Comment contains off-topic content",
         }
+        text_preview = text[:50] + "..." if len(text) > 50 else text
+        print(f"[COMMENT_MODERATION] Comment {comment_id} MASQUE - Raison: {result['reason']} (texte: '{text_preview}')")
+        return result
 
-    # Check if comment mentions the brand or belief (simple check)
-    context_keywords = [brand_name.lower(), belief_title.lower()]
-    if not any(keyword in text_lower for keyword in context_keywords):
-        return {
+    # Check if any word from brand_name or belief_title is mentioned in the text
+    # This is more permissive than requiring the full phrase
+    import re
+    
+    def get_word_variations(word):
+        """Generate variations of a word by removing common French prefixes"""
+        # Remove punctuation
+        cleaned = re.sub(r"[\W_]", "", word)
+        variations = [cleaned]
+        
+        # Common French prefixes to try removing
+        prefixes = ["l", "d", "de", "la", "le", "les", "du", "des"]
+        for prefix in prefixes:
+            if cleaned.startswith(prefix):
+                suffix = cleaned[len(prefix):]
+                # Only add non-empty variations of reasonable length
+                if suffix and len(suffix) >= 2:
+                    variations.append(suffix)
+        
+        return variations
+    
+    # Get all words from brand and belief
+    all_context_words = brand_name.lower().split() + belief_title.lower().split()
+    
+    # Check if any variation of any context word is in the text
+    context_found = False
+    for word in all_context_words:
+        variations = get_word_variations(word)
+        if any(v in text_lower for v in variations):
+            context_found = True
+            break
+    
+    if not context_found:
+        result = {
             "comment_id": comment_id,
             "is_pertinent": False,
             "reason": "Comment does not mention the brand or belief",
         }
+        text_preview = text[:50] + "..." if len(text) > 50 else text
+        print(f"[COMMENT_MODERATION] Comment {comment_id} MASQUE - Raison: {result['reason']} (texte: '{text_preview}')")
+        return result
 
-    # If none of the above, consider it pertinent
-    return {
+    result = {
         "comment_id": comment_id,
         "is_pertinent": True,
         "reason": "Comment appears to be on-topic and relevant",
     }
+    text_preview = text[:50] + "..." if len(text) > 50 else text
+    print(f"[COMMENT_MODERATION] Comment {comment_id} CONSERVE - Raison: {result['reason']} (texte: '{text_preview}')")
+    return result
 
 
-# Enregistrer les outils de suggestion d'emoji
 @mcp.tool(
     name="suggest_petition_emoji",
     description="Suggère un emoji pertinent pour une pétition basé sur sa description en utilisant Mistral AI",
@@ -212,14 +251,9 @@ def mcp_suggest_petition_emoji(description: str) -> dict:
     description="Retrieve petitions that have not yet been moderated, with their title, description, emoji, initiator info, and signature count. The LLM should evaluate whether each petition is relevant to ethical/engaged consumption and flag any malicious or off-topic content.",
     input_schema={
         "type": "object",
-        "properties": {
-            "limit": {
-                "type": "integer",
-                "default": 50
-            }
-        },
-        "required": []
-    }
+        "properties": {"limit": {"type": "integer", "default": 50}},
+        "required": [],
+    },
 )
 def get_petitions_to_moderate(limit: int = 50):
     conn = get_conn()
@@ -256,7 +290,7 @@ def get_petitions_to_moderate(limit: int = 50):
     cursor.close()
     conn.close()
 
-    return { "petitions": results }
+    return {"petitions": results}
 
 
 @mcp.tool(
@@ -268,23 +302,18 @@ def get_petitions_to_moderate(limit: int = 50):
             "petition_ids": {
                 "type": "array",
                 "items": {"type": "integer"},
-                "description": "List of petition IDs to mark as not pertinent"
+                "description": "List of petition IDs to mark as not pertinent",
             }
         },
-        "required": ["petition_ids"]
+        "required": ["petition_ids"],
     },
     output_schema={
         "type": "object",
         "properties": {
-            "updated_count": {
-                "type": "integer"
-            },
-            "updated_ids": {
-                "type": "array",
-                "items": {"type": "integer"}
-            }
-        }
-    }
+            "updated_count": {"type": "integer"},
+            "updated_ids": {"type": "array", "items": {"type": "integer"}},
+        },
+    },
 )
 def mark_petitions_not_pertinent(petition_ids: list[int]):
     if not petition_ids:
@@ -309,10 +338,7 @@ def mark_petitions_not_pertinent(petition_ids: list[int]):
     cursor.close()
     conn.close()
 
-    return {
-        "updated_count": updated_count,
-        "updated_ids": petition_ids
-    }
+    return {"updated_count": updated_count, "updated_ids": petition_ids}
 
 
 @mcp.tool(
@@ -337,8 +363,14 @@ def main(argv: list[str]) -> int:
     if transport == "stdio":
         adapter = MCPStdioAdapter(mcp)
     else:
-        listening_intf = argv[2] if len(argv) > 2 else os.getenv("HOST", DEFAULT_LISTENING_INTF)
-        listening_port = int(argv[3]) if len(argv) > 3 else int(os.getenv("PORT", DEFAULT_LISTENING_PORT))
+        listening_intf = (
+            argv[2] if len(argv) > 2 else os.getenv("HOST", DEFAULT_LISTENING_INTF)
+        )
+        listening_port = (
+            int(argv[3])
+            if len(argv) > 3
+            else int(os.getenv("PORT", DEFAULT_LISTENING_PORT))
+        )
         adapter = MCPHttpAdapter(mcp, listening_intf, listening_port)
 
     adapter.serve()
