@@ -1,1 +1,3 @@
 mysql-connector-python==8.0.33
+mistralai==0.3.0
+python-dotenv==1.0.0

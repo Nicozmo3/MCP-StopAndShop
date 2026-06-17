@@ -1,3 +1,4 @@
+from typing import Union, Optional
 
 FIELD_JSONRPC = "jsonrpc"
 FIELD_ID = "id"
@@ -7,14 +8,14 @@ FIELD_ERROR = "error"
 
 EXPECTED_FIELD_JSONRPC_VALUE = "2.0"
 
-def build_json_rpc_success_response(request_id: int | str, result: dict):
+def build_json_rpc_success_response(request_id: Union[int, str], result: dict):
     return {
         FIELD_JSONRPC: EXPECTED_FIELD_JSONRPC_VALUE,
         FIELD_ID: request_id,
         FIELD_RESULT: result
     }
 
-def build_json_rpc_error_response(request_id: int | str | None, code: int, message: str):
+def build_json_rpc_error_response(request_id: Union[int, str, None], code: int, message: str):
     return {
         FIELD_JSONRPC: EXPECTED_FIELD_JSONRPC_VALUE,
         FIELD_ID: request_id,

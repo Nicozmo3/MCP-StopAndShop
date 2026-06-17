@@ -1,3 +1,4 @@
+from typing import Optional
 import json
 
 from json_rpc import build_json_rpc_error_response, build_json_rpc_success_response, validate_json_rpc_request
@@ -15,7 +16,7 @@ class MCPServer:
         self.description = description
         self._tools = {}
 
-    def tool(self, name: str, description: str, input_schema: dict | None = None, output_schema: dict | None = None):
+    def tool(self, name: str, description: str, input_schema: Optional[dict] = None, output_schema: Optional[dict] = None):
         def decorator(func):
             tool_name = name or func.__name__
             tool_description = description or func.__doc__ or ""
