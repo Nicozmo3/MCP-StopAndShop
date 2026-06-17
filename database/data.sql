@@ -70,6 +70,7 @@ CREATE TABLE petition (
     start_date DATETIME,
     initiator_anonymous BOOLEAN,
     signatures INT,
+    is_moderation_pertinent BOOLEAN DEFAULT NULL,
     FOREIGN KEY (initiator_id) REFERENCES account(account_id)
 );
 

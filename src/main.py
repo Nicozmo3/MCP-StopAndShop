@@ -208,6 +208,111 @@ def mcp_suggest_petition_emoji(description: str) -> dict:
 
 
 @mcp.tool(
+    name="get_petitions_to_moderate",
+    description="Retrieve petitions that have not yet been moderated, with their title, description, emoji, initiator info, and signature count. The LLM should evaluate whether each petition is relevant to ethical/engaged consumption and flag any malicious or off-topic content.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "limit": {
+                "type": "integer",
+                "default": 50
+            }
+        },
+        "required": []
+    }
+)
+def get_petitions_to_moderate(limit: int = 50):
+    conn = get_conn()
+    cursor = conn.cursor(dictionary=True)
+
+    query = """
+        SELECT 
+            p.petition_id,
+            p.title,
+            p.description,
+            p.emoji,
+            p.start_date,
+            p.signatures,
+            p.initiator_anonymous,
+            a.username AS initiator_username
+
+        FROM petition p
+        JOIN account a ON p.initiator_id = a.account_id
+
+        WHERE p.is_moderation_pertinent IS NULL
+
+        ORDER BY p.start_date ASC
+        LIMIT %s
+    """
+
+    cursor.execute(query, (limit,))
+    results = cursor.fetchall()
+
+    # Convert datetime objects to string for JSON serialization
+    for r in results:
+        if r.get("start_date"):
+            r["start_date"] = r["start_date"].isoformat()
+
+    cursor.close()
+    conn.close()
+
+    return { "petitions": results }
+
+
+@mcp.tool(
+    name="mark_petitions_not_pertinent",
+    description="Mark multiple petitions as not pertinent (malicious, off-topic, or unrelated to ethical/engaged consumption) after LLM classification",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "petition_ids": {
+                "type": "array",
+                "items": {"type": "integer"},
+                "description": "List of petition IDs to mark as not pertinent"
+            }
+        },
+        "required": ["petition_ids"]
+    },
+    output_schema={
+        "type": "object",
+        "properties": {
+            "updated_count": {
+                "type": "integer"
+            },
+            "updated_ids": {
+                "type": "array",
+                "items": {"type": "integer"}
+            }
+        }
+    }
+)
+def mark_petitions_not_pertinent(petition_ids: list[int]):
+    conn = get_conn()
+    cursor = conn.cursor()
+
+    placeholders = ",".join(["%s"] * len(petition_ids))
+
+    query = f"""
+        UPDATE petition
+        SET is_moderation_pertinent = FALSE
+        WHERE petition_id IN ({placeholders})
+    """
+
+    cursor.execute(query, petition_ids)
+    conn.commit()
+
+    updated_count = cursor.rowcount
+
+    cursor.close()
+    conn.close()
+
+    return {
+        "updated_count": updated_count,
+        "updated_ids": petition_ids
+    }
+
+
+@mcp.tool(
     name="analyze_petition_text",
     description="Analyse complète du texte d'une pétition avec catégorie, sentiment, mots-clés et emoji suggéré",
     input_schema={
