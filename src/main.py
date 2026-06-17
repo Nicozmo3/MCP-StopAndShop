@@ -287,6 +287,9 @@ def get_petitions_to_moderate(limit: int = 50):
     }
 )
 def mark_petitions_not_pertinent(petition_ids: list[int]):
+    if not petition_ids:
+        return {"updated_count": 0, "updated_ids": []}
+
     conn = get_conn()
     cursor = conn.cursor()
 
