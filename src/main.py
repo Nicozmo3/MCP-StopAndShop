@@ -146,10 +146,100 @@ def check_comment_pertinence(
     comment_id: int, text: str, brand_name: str, belief_title: str
 ) -> dict:
     """
-    Check if a comment is pertinent based on its content and context.
-    For now, implements a simple check - in production this would call an LLM.
+    Check if a comment is pertinent based on its content and context using Mistral AI.
+    """
+    import os
+    import json
+    
+    MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
+    
+    text_preview = text[:50] + "..." if len(text) > 50 else text
+    
+    # Fallback à l'ancien algorithme si pas d'API key
+    if not MISTRAL_API_KEY:
+        print(f"[COMMENT_MODERATION] MISTRAL_API_KEY non configurée, utilisation de l'algorithme de fallback pour le commentaire {comment_id}")
+        return check_comment_pertinence_fallback(comment_id, text, brand_name, belief_title)
+    
+    try:
+        from mistralai.client import MistralClient
+        from mistralai.models.chat_completion import ChatMessage
+    except ImportError as e:
+        print(f"[COMMENT_MODERATION] Erreur d'import Mistral AI: {e}, utilisation de l'algorithme de fallback pour le commentaire {comment_id}")
+        return check_comment_pertinence_fallback(comment_id, text, brand_name, belief_title)
+    
+    try:
+        print(f"\n[COMMENT_MODERATION] === DEBUT ANALYSE IA COMMENTAIRE {comment_id} ===")
+        print(f"[COMMENT_MODERATION] Texte: '{text_preview}'")
+        print(f"[COMMENT_MODERATION] Marque: {brand_name}")
+        print(f"[COMMENT_MODERATION] Croyance: {belief_title}")
+        
+        prompt = f'''Analyse ce commentaire dans le contexte de la marque "{brand_name}" et de la croyance "{belief_title}".
+Détermine si le commentaire est pertinent pour cette discussion.
+
+Critères de pertinence :
+- Le commentaire doit être lié à la marque ou à la croyance mentionnée
+- Le commentaire doit être constructif et utile pour la discussion
+- Exclure les commentaires hors-sujet, spam, ou non pertinents
+
+Réponds UNIQUEMENT avec un JSON contenant :
+{{
+    "is_pertinent": true/false,
+    "reason": "explication claire de la décision"
+}}
+
+Commentaire à analyser : "{text}"'''
+        
+        print(f"[COMMENT_MODERATION] Prompt envoyé à Mistral...")
+        
+        client = MistralClient(api_key=MISTRAL_API_KEY)
+        response = client.chat(
+            model="mistral-small",
+            messages=[ChatMessage(role="user", content=prompt)],
+            max_tokens=200,
+            temperature=0.2,
+        )
+        
+        content = response.choices[0].message.content.strip()
+        print(f"[COMMENT_MODERATION] Mistral a retourné: {content}")
+        
+        # Nettoyer la réponse pour extraire le JSON (enlever les backticks et blocs markdown)
+        import re
+        # Supprimer les blocs ```json ... ``` ou ``` ... ```
+        content = re.sub(r'^```(?:json)?\s*', '', content)
+        content = re.sub(r'\s*```$', '', content)
+        content = content.strip()
+        
+        # Essayer de parser le JSON
+        try:
+            result = json.loads(content)
+        except json.JSONDecodeError as e:
+            print(f"[COMMENT_MODERATION] Erreur de parsing JSON: {e}, contenu brut: '{content}'")
+            print(f"[COMMENT_MODERATION] Utilisation de l'algorithme de fallback pour le commentaire {comment_id}")
+            return check_comment_pertinence_fallback(comment_id, text, brand_name, belief_title)
+        
+        result["comment_id"] = comment_id
+        
+        if result.get("is_pertinent"):
+            print(f"[COMMENT_MODERATION] Comment {comment_id} CONSERVE - Raison: {result.get('reason', 'pas de raison fournie')} (texte: '{text_preview}')")
+        else:
+            print(f"[COMMENT_MODERATION] Comment {comment_id} MASQUE - Raison: {result.get('reason', 'pas de raison fournie')} (texte: '{text_preview}')")
+        
+        print(f"[COMMENT_MODERATION] === FIN ANALYSE IA COMMENTAIRE {comment_id} ===\n")
+        return result
+        
+    except Exception as e:
+        print(f"[COMMENT_MODERATION] Erreur avec Mistral AI: {type(e).__name__}: {e}, utilisation de l'algorithme de fallback pour le commentaire {comment_id}")
+        return check_comment_pertinence_fallback(comment_id, text, brand_name, belief_title)
+
+
+def check_comment_pertinence_fallback(
+    comment_id: int, text: str, brand_name: str, belief_title: str
+) -> dict:
+    """
+    Ancienne méthode de vérification par algorithme simple (fallback si IA indisponible).
     """
     text_lower = text.lower()
+    text_preview = text[:50] + "..." if len(text) > 50 else text
 
     if len(text.strip()) < 10:
         result = {
@@ -157,7 +247,6 @@ def check_comment_pertinence(
             "is_pertinent": False,
             "reason": "Comment is too short to be meaningful",
         }
-        text_preview = text[:50] + "..." if len(text) > 50 else text
         print(f"[COMMENT_MODERATION] Comment {comment_id} MASQUE - Raison: {result['reason']} (texte: '{text_preview}')")
         return result
 
@@ -166,37 +255,25 @@ def check_comment_pertinence(
         result = {
             "comment_id": comment_id,
             "is_pertinent": False,
-            "reason": f"Comment contains off-topic content",
+            "reason": "Comment contains off-topic content",
         }
-        text_preview = text[:50] + "..." if len(text) > 50 else text
         print(f"[COMMENT_MODERATION] Comment {comment_id} MASQUE - Raison: {result['reason']} (texte: '{text_preview}')")
         return result
 
-    # Check if any word from brand_name or belief_title is mentioned in the text
-    # This is more permissive than requiring the full phrase
     import re
     
     def get_word_variations(word):
-        """Generate variations of a word by removing common French prefixes"""
-        # Remove punctuation
         cleaned = re.sub(r"[\W_]", "", word)
         variations = [cleaned]
-        
-        # Common French prefixes to try removing
         prefixes = ["l", "d", "de", "la", "le", "les", "du", "des"]
         for prefix in prefixes:
             if cleaned.startswith(prefix):
                 suffix = cleaned[len(prefix):]
-                # Only add non-empty variations of reasonable length
                 if suffix and len(suffix) >= 2:
                     variations.append(suffix)
-        
         return variations
     
-    # Get all words from brand and belief
     all_context_words = brand_name.lower().split() + belief_title.lower().split()
-    
-    # Check if any variation of any context word is in the text
     context_found = False
     for word in all_context_words:
         variations = get_word_variations(word)
@@ -210,7 +287,6 @@ def check_comment_pertinence(
             "is_pertinent": False,
             "reason": "Comment does not mention the brand or belief",
         }
-        text_preview = text[:50] + "..." if len(text) > 50 else text
         print(f"[COMMENT_MODERATION] Comment {comment_id} MASQUE - Raison: {result['reason']} (texte: '{text_preview}')")
         return result
 
@@ -219,7 +295,6 @@ def check_comment_pertinence(
         "is_pertinent": True,
         "reason": "Comment appears to be on-topic and relevant",
     }
-    text_preview = text[:50] + "..." if len(text) > 50 else text
     print(f"[COMMENT_MODERATION] Comment {comment_id} CONSERVE - Raison: {result['reason']} (texte: '{text_preview}')")
     return result
 
